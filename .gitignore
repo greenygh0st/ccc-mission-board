@@ -1,0 +1,10 @@
+node_modules/
+dist/
+data/
+data-mock/
+server/data*/
+.env
+*.log
+test-results/
+playwright-report/
+.DS_Store

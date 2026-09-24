@@ -1,0 +1,21 @@
+{
+  "name": "ccc-mission-board",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Interactive touchscreen missionary board for CCC, fed by Gathered",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w server & npm run dev -w web",
+    "dev:mock": "MOCK_GATHERED=1 VIEWER_ALLOWED_NETWORKS=127.0.0.1,::1 DATA_DIR=./data-mock npm run dev",
+    "build": "npm run build -w web && npm run build -w server",
+    "start": "npm run start -w server",
+    "test": "npm test -w server && npm test -w web",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

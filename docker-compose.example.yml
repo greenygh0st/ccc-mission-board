@@ -1,0 +1,44 @@
+# Example deployment next to Gathered, fronted by the reverse proxy manager.
+#
+# Two separate concerns:
+#
+# 1. Board → Gathered. Gathered's feed only answers allowlisted IPs, so this
+#    container calls Gathered's `api` container directly from a FIXED IP on a
+#    small shared network (Docker only allows fixed IPs on networks with a
+#    configured subnet):
+#      docker network create --subnet 172.30.60.0/24 gathered-board
+#      (add `gathered-board` to the api service's networks in Gathered's compose)
+#    Then in Gathered → Settings → Integrations → Missionary Board, allow 172.30.60.10.
+#
+# 2. Kiosk → board. Published ONLY through the reverse proxy, whose access list
+#    allows the church network (192.168.0.0/22). The board checks again itself
+#    using the real client IP from X-Forwarded-For — trusted only from the
+#    proxy's fixed address (TRUST_PROXY). No host ports are published.
+
+services:
+  mission-board:
+    build: .
+    image: ccc-mission-board:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GATHERED_BASE_URL: http://api:3000
+      VIEWER_ALLOWED_NETWORKS: 192.168.0.0/22
+      TRUST_PROXY: 172.30.50.2 # the proxy manager's address on the `proxy` network
+    volumes:
+      - mission-board-data:/data
+    networks:
+      gathered-board:
+        ipv4_address: 172.30.60.10
+      proxy: {}
+
+networks:
+  gathered-board:
+    external: true
+  # The network your proxy manager already uses to reach its upstreams. Give
+  # the proxy manager a fixed IP on it (e.g. 172.30.50.2) so TRUST_PROXY is stable.
+  proxy:
+    external: true
+
+volumes:
+  mission-board-data:
