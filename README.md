@@ -68,52 +68,59 @@ web/     React 19 + Vite + Tailwind v4 + react-globe.gl + framer-motion (Vitest 
 
 | Var | Required | Notes |
 |---|---|---|
-| `GATHERED_BASE_URL` | ✓ | e.g. `http://api:3000` (internal Docker network) or the public https URL |
+| `GATHERED_BASE_URL` | ✓ | `https://gathered.cccyukon.org` (via Cloudflare, so Gathered sees the church WAN IP) |
 | `GATHERED_BOARD_TOKEN` | ✓ | From Gathered → Settings → Integrations → Missionary Board. Header-only, server-side only |
-| `VIEWER_ALLOWED_NETWORKS` | ✓ | IPs/CIDRs allowed to **open the board**, i.e. the church network `192.168.0.0/22`. Everyone else gets 404. No permissive default |
+| `VIEWER_ALLOWED_NETWORKS` | ✓ | IPs/CIDRs allowed to **open the board**, i.e. the church WAN IP `12.189.82.18`. Everyone else gets 404. No permissive default |
 | `TRUST_PROXY` | ✓ behind a proxy | The reverse proxy's container IP. `X-Forwarded-For` is believed only from it |
+| `TRUST_CLOUDFLARE` | ✓ via Cloudflare | `1` to also step past Cloudflare's edge ranges (`server/src/cloudflare.ts`) to the real viewer |
 | `CHURCH_LAT` / `CHURCH_LNG` | | Home point for the arcs (default Yukon, OK) |
 | `CHURCH_NAME` | | Overrides the name from Gathered's branding |
+| `GATHERED_IP_FAMILY` | | `4` (default), `6` or `auto`. Gathered allowlists by address, and a dual-stack host has a different IPv6 one, so the board sticks to IPv4 unless told otherwise |
 | `GATHERED_FORWARDED_PROTO` | | Defaults to `https` for `http://` base URLs so Gathered's `force_ssl` doesn't redirect internal calls; `none` disables it |
 | `POLL_SECONDS` (120), `CLIENT_POLL_SECONDS` (60), `IDLE_SECONDS` (90), `SPOTLIGHT_SECONDS` (12) | | Tuning |
 | `PORT` (8080), `DATA_DIR` (`./data`), `MOCK_GATHERED` | | `MOCK_GATHERED=1` serves a fictional fixture (dev only) |
 
 The server validates everything at boot and exits with a clear message if something is missing.
 
-## Deploying next to Gathered (behind the reverse proxy)
+## Deploying (church topology)
 
-See `docker-compose.example.yml`. There are two separate network concerns.
+Everything goes out through the church's WAN and back in via Cloudflare:
 
-**1. Board → Gathered.** Gathered's feed only answers allowlisted IPs.
-- Give this container a **fixed IP** on a small network shared with Gathered's `api` container.
-  Docker needs a configured subnet for that:
-  `docker network create --subnet 172.30.60.0/24 gathered-board`.
-- Call `http://api:3000` directly, not through the proxy.
-- In Gathered → Settings → Integrations → Missionary Board, allow exactly that IP (e.g.
-  `172.30.60.10`) and create the board token.
+```
+kiosk ──► Cloudflare ──► church WAN 12.189.82.18 ──► proxy manager ──► board container
+board container ──► Cloudflare ──► church WAN ──► proxy manager ──► Gathered
+```
 
-**2. Kiosk → board.** The board page shows missionary data without a token, so the church
-network is filtered twice:
-- **Reverse proxy:** add a proxy host for the board with an **access list that allows
-  `192.168.0.0/22` and denies everything else**. Don't publish any host ports on the container.
-- **Board:** `VIEWER_ALLOWED_NETWORKS=192.168.0.0/22` and `TRUST_PROXY=<proxy's container IP>`.
-  - The board only believes `X-Forwarded-For` from that address.
-  - If `TRUST_PROXY` is missing or wrong, every viewer looks like the proxy and gets a 404. That
-    fails closed.
+Don't use a local DNS override. Internal 80/443 goes straight to the application box and skips
+the proxy manager.
 
-**The check that matters (do this before trusting it):**
-- **From a device on the church network,** open `https://<board-host>/healthz`. `yourIp` must be
-  that device's real `192.168.x.x` address, with `yourIpAllowed: true`.
-- **From a phone on cellular data** (Wi-Fi off), the board URL must be refused by the proxy.
-- **If `yourIp` is the router's address** (e.g. `192.168.0.1`) or a Docker address for *every*
-  device, the proxy isn't seeing real client IPs. Hairpin NAT or Docker's userland proxy can do
-  this. Then traffic from the internet could look like it's inside `192.168.0.0/22` too. Fix
-  that before going live, for example by reaching the board via internal DNS rather than the
-  public hostname.
+**1. Board → Gathered.**
+- Set `GATHERED_BASE_URL=https://gathered.cccyukon.org`. Gathered sees the church's external IP
+  like every other device in the building.
+- In Gathered → Settings → Integrations → Missionary Board, **allow `12.189.82.18`** and create the
+  board token.
+- This needs Gathered's Cloudflare fix (`trusted_proxies.rb`, 2026-09-26). Before it, Gathered saw
+  a random Cloudflare edge instead of the church IP.
+- `12.189.82.18` means "anything leaving the church", including guest Wi-Fi and VPN users. The
+  token is the second factor.
 
-**Health:**
-- `/healthz` shows `stale:false` and the missionary count once Gathered answers.
-- `lastErrorStatus: 404` means the token or IP allowlist is wrong on the Gathered side.
+**2. Kiosk → board.** Add a proxy host for the board (e.g. `board.cccyukon.org`, proxied through
+Cloudflare) and set:
+- `VIEWER_ALLOWED_NETWORKS=12.189.82.18`. The board only opens for devices leaving the church.
+- `TRUST_PROXY=<proxy manager's container IP>` and `TRUST_CLOUDFLARE=1`, so the board steps past
+  the proxy manager and Cloudflare's edge to the real viewer. Without them every viewer looks like
+  the proxy or an edge and gets a 404. That fails closed.
+- Optionally, add a proxy-manager access list or a Cloudflare rule allowing only `12.189.82.18`,
+  as defense in depth.
+- Don't publish host ports on the container.
+
+**Check it:**
+- **From inside the church:** `https://<board-host>/healthz` shows `yourIp: 12.189.82.18`,
+  `yourIpAllowed: true`, and `stale: false` once Gathered answers.
+- **From a phone on cellular:** the board is refused.
+- **`yourIp` looks like a Cloudflare address** (`172.64–71.x`, `104.16–31.x`, `162.158–159.x`):
+  `TRUST_CLOUDFLARE` is off, or Cloudflare added a range. Update `server/src/cloudflare.ts`.
+- **`lastErrorStatus: 404`:** Gathered's allowlist or token is wrong.
 
 **Kiosk browser:** Chromium with `--kiosk --noerrdialogs --disable-pinch --overscroll-history-navigation=0 https://<board-host>`.
 

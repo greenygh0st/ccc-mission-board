@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CLOUDFLARE_RANGES } from './cloudflare.js'
 import { parseNetworks } from './viewerAllowlist.js'
 
 const bool = z
@@ -15,6 +16,10 @@ const schema = z
     GATHERED_BASE_URL: z.string().optional(),
     GATHERED_BOARD_TOKEN: z.string().optional(),
     GATHERED_FORWARDED_PROTO: z.enum(['https', 'http', 'none']).optional(),
+    // Gathered allowlists caller IPs, and IPv4/IPv6 are different addresses.
+    // Node otherwise races both (happy eyeballs) and may arrive over an IPv6
+    // address nobody allowlisted. Default: IPv4 only.
+    GATHERED_IP_FAMILY: z.enum(['4', '6', 'auto']).default('4'),
 
     // Optional override; otherwise the church name comes from Gathered's branding.
     CHURCH_NAME: z.string().optional(),
@@ -23,6 +28,9 @@ const schema = z
 
     VIEWER_ALLOWED_NETWORKS: z.string().optional(),
     TRUST_PROXY: z.string().optional(),
+    // Kiosk reaches the board through a Cloudflare-proxied hostname: also step
+    // past Cloudflare's edge (see cloudflare.ts).
+    TRUST_CLOUDFLARE: bool,
 
     POLL_SECONDS: num(120, 30, 3600),
     CLIENT_POLL_SECONDS: num(60, 15, 3600),
@@ -89,10 +97,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       baseUrl,
       token: e.GATHERED_BOARD_TOKEN ?? '',
       forwardedProto,
+      ipFamily: e.GATHERED_IP_FAMILY === 'auto' ? null : (Number(e.GATHERED_IP_FAMILY) as 4 | 6),
     },
     church: { name: e.CHURCH_NAME, lat: e.CHURCH_LAT, lng: e.CHURCH_LNG },
     viewerNetworks: parseNetworks(e.VIEWER_ALLOWED_NETWORKS!).networks,
-    trustProxy: e.TRUST_PROXY ? e.TRUST_PROXY.split(',').map((s) => s.trim()).filter(Boolean) : false,
+    trustProxy: trustList(e.TRUST_PROXY, e.TRUST_CLOUDFLARE),
     pollSeconds: e.POLL_SECONDS,
     clientPollSeconds: e.CLIENT_POLL_SECONDS,
     idleSeconds: e.IDLE_SECONDS,
@@ -103,4 +112,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     dataDir: e.DATA_DIR,
     webDist: e.WEB_DIST,
   }
+}
+
+function trustList(trustProxy: string | undefined, cloudflare: boolean): string[] | false {
+  const list = [
+    ...(trustProxy ? trustProxy.split(',').map((s) => s.trim()).filter(Boolean) : []),
+    ...(cloudflare ? CLOUDFLARE_RANGES : []),
+  ]
+  return list.length ? list : false
 }

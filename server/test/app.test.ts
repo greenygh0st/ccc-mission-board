@@ -44,6 +44,30 @@ describe('HTTP app', () => {
     expect(notTheProxy.statusCode).toBe(404)
   })
 
+  describe('behind Cloudflare → proxy manager → board', () => {
+    const viaCloudflare = (xff: string) => ({ url: '/healthz', remoteAddress: '172.20.0.2', headers: { 'x-forwarded-for': xff } })
+
+    it('resolves the real viewer (church WAN IP) past the Cloudflare edge when TRUST_CLOUDFLARE=1', async () => {
+      const app = await setup({ TRUST_PROXY: '172.20.0.2', TRUST_CLOUDFLARE: '1', VIEWER_ALLOWED_NETWORKS: '12.189.82.18' })
+      for (const edge of ['172.69.65.151', '104.22.148.14', '2606:4700:3032::6815:17b5']) {
+        expect((await app.inject(viaCloudflare(`12.189.82.18, ${edge}`))).json()).toMatchObject({ yourIp: '12.189.82.18', yourIpAllowed: true })
+      }
+      const board = await app.inject({ ...viaCloudflare('12.189.82.18, 172.69.65.151'), url: '/api/board' })
+      expect(board.statusCode).toBe(200)
+    })
+
+    it('cannot be spoofed by prepending the allowed IP', async () => {
+      const app = await setup({ TRUST_PROXY: '172.20.0.2', TRUST_CLOUDFLARE: '1', VIEWER_ALLOWED_NETWORKS: '12.189.82.18' })
+      const res = await app.inject({ ...viaCloudflare('12.189.82.18, 8.8.8.8, 172.69.65.151'), url: '/api/board' })
+      expect(res.statusCode).toBe(404)
+    })
+
+    it('without TRUST_CLOUDFLARE the edge is the viewer, so it fails closed', async () => {
+      const app = await setup({ TRUST_PROXY: '172.20.0.2', VIEWER_ALLOWED_NETWORKS: '12.189.82.18' })
+      expect((await app.inject(viaCloudflare('12.189.82.18, 172.69.65.151'))).json()).toMatchObject({ yourIp: '172.69.65.151', yourIpAllowed: false })
+    })
+  })
+
   it('keeps /healthz reachable for the container healthcheck without exposing data', async () => {
     const app = await setup()
     const res = await app.inject({ url: '/healthz', remoteAddress: '127.0.0.1' })

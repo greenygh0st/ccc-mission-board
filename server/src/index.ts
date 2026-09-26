@@ -18,6 +18,7 @@ const client = new GatheredClient({
   baseUrl: config.gathered.baseUrl,
   token: config.gathered.token,
   forwardedProto: config.gathered.forwardedProto,
+  ipFamily: config.gathered.ipFamily,
 })
 const source = config.mock ? new MockSource(config.church.name) : client
 const images = new ImageCache(

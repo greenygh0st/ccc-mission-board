@@ -1,3 +1,4 @@
+import { Agent, fetch as undiciFetch } from 'undici'
 import type { GatheredBoardResponse, GatheredBranding } from './types.js'
 
 export class GatheredError extends Error {
@@ -10,6 +11,8 @@ export interface GatheredClientOptions {
   baseUrl: string
   token: string
   forwardedProto: string | null
+  /** Pin connections to IPv4 or IPv6 (null = let Node choose). */
+  ipFamily?: 4 | 6 | null
   fetchImpl?: typeof fetch
   timeoutMs?: number
 }
@@ -31,7 +34,7 @@ export class GatheredClient {
 
   constructor(private readonly opts: GatheredClientOptions) {
     this.base = new URL(opts.baseUrl)
-    this.fetchImpl = opts.fetchImpl ?? fetch
+    this.fetchImpl = opts.fetchImpl ?? pinnedFetch(opts.ipFamily ?? null)
     this.timeoutMs = opts.timeoutMs ?? 15_000
   }
 
@@ -102,4 +105,13 @@ export class GatheredClient {
       throw new GatheredError(`Could not reach Gathered at ${url.origin}: ${(err as Error).message}`, null)
     }
   }
+}
+
+/** fetch that only connects over the given IP family (Gathered's allowlist is per address). */
+export function pinnedFetch(family: 4 | 6 | null): typeof fetch {
+  if (!family) return fetch
+  // undici's typings demand a port here, but it's filled in per request.
+  const dispatcher = new Agent({ connect: { family, autoSelectFamily: false } as unknown as Agent.Options['connect'] })
+  return ((input: Parameters<typeof fetch>[0], init?: RequestInit) =>
+    undiciFetch(input as never, { ...(init as object), dispatcher } as never)) as unknown as typeof fetch
 }
