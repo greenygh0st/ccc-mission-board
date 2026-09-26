@@ -124,6 +124,29 @@ Cloudflare) and set:
 
 **Kiosk browser:** Chromium with `--kiosk --noerrdialogs --disable-pinch --overscroll-history-navigation=0 https://<board-host>`.
 
+## CI and the Docker image
+
+`.github/workflows/ci.yml` runs on every pull request and push:
+
+1. **test:** `npm ci`, typecheck, server and web tests, production build (Node 22).
+2. **docker:** builds the image and smoke-tests it in mock mode: `/healthz` is ok, the feed has
+   missionaries, a photo comes back as WebP, and the page is served.
+   - On **push to `main`** it also pushes `<dockerhub-user>/ccc-mission-board:<commit sha>` and
+     `:latest` to Docker Hub.
+   - On a **`v1.2.3` tag** it also pushes `:1.2.3`.
+   - Pull requests never push.
+
+It needs the repo secrets `DOCKER_HUB_USERNAME` and `DOCKER_HUB_ACCESS_TOKEN`, the same ones
+`ccc-gathered` uses. The image is `linux/amd64`, and runs as the non-root `node` user with
+`/data` as a volume.
+
+To build and smoke-test locally:
+
+```bash
+docker build -t ccc-mission-board:local .
+docker run --rm -p 8080:8080 -e MOCK_GATHERED=1 -e VIEWER_ALLOWED_NETWORKS=0.0.0.0/0 ccc-mission-board:local
+```
+
 ## Development
 
 Needs Node 22 or newer.

@@ -6,7 +6,7 @@ COPY server/package.json server/
 COPY web/package.json web/
 RUN npm ci
 COPY . .
-RUN npm run build && npm prune --omit=dev
+RUN npm run build
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim
@@ -16,9 +16,15 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     WEB_DIST=/app/web/dist
 WORKDIR /app
-COPY --from=build /app/package.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/server/package.json ./server/
+# Only the server's production dependencies — the web app ships as static
+# files, so three.js/React/etc. aren't needed at runtime. npm places them
+# wherever the lockfile says (root or server/node_modules), so install rather
+# than copy node_modules between stages.
+COPY package.json package-lock.json ./
+COPY server/package.json server/
+COPY web/package.json web/
+RUN npm ci --omit=dev --workspace server --include-workspace-root \
+  && npm cache clean --force
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/web/dist ./web/dist
 RUN mkdir -p /data && chown node:node /data

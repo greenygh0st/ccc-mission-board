@@ -9,8 +9,9 @@
 
 services:
   mission-board:
-    build: .
-    image: ccc-mission-board:latest
+    # Published by GitHub Actions (.github/workflows/ci.yml) on every push to main.
+    # Pin a commit SHA tag instead of :latest if you want deploys to be explicit.
+    image: <dockerhub-user>/ccc-mission-board:latest
     restart: unless-stopped
     env_file: .env # GATHERED_BOARD_TOKEN lives here
     environment:
