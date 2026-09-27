@@ -3,6 +3,7 @@ import { ArrowLeft, MapPin, ShieldCheck } from 'lucide-react'
 import { servingSinceYear } from '../lib/time'
 import type { BoardMissionary, BoardUpdate } from '../types'
 import QrCode from './QrCode'
+import ScrollArea from './ScrollArea'
 import UpdateCard from './UpdateCard'
 
 interface Props {
@@ -24,8 +25,10 @@ export default function MissionaryDetail({ missionary: m, onBack, onOpenImage }:
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -24 }}
       transition={{ type: 'spring', stiffness: 240, damping: 30 }}
-      className="no-scrollbar flex h-full flex-col gap-[clamp(14px,1.3vw,28px)] overflow-y-auto pb-4 *:shrink-0"
+      className="h-full"
     >
+      {/* pb leaves room for the "Scroll for more" pill over the last item */}
+      <ScrollArea className="no-scrollbar flex flex-col gap-[clamp(14px,1.3vw,28px)] pb-20 *:shrink-0">
       <button
         type="button"
         onClick={onBack}
@@ -78,6 +81,7 @@ export default function MissionaryDetail({ missionary: m, onBack, onOpenImage }:
       )}
 
       {m.websiteUrl && !m.sensitive && <QrCode url={m.websiteUrl} label="Scan to follow their ministry on your phone" />}
+      </ScrollArea>
     </motion.div>
   )
 }

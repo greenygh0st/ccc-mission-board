@@ -1,5 +1,6 @@
 import { AnimatePresence } from 'framer-motion'
 import type { BoardMissionary, BoardUpdate } from '../types'
+import ScrollArea from './ScrollArea'
 import UpdateCard from './UpdateCard'
 
 interface Props {
@@ -25,7 +26,8 @@ export default function OverviewPanel({ updates, byId, stats, onSelect, onOpenIm
         </p>
       </header>
 
-      <div className="no-scrollbar -mx-1 flex min-h-0 flex-1 flex-col gap-[clamp(12px,1.1vw,24px)] overflow-y-auto px-1 pb-2 *:shrink-0">
+      <div className="min-h-0 flex-1">
+      <ScrollArea className="no-scrollbar -mx-1 flex flex-col gap-[clamp(12px,1.1vw,24px)] px-1 pb-20 *:shrink-0">
         <AnimatePresence initial={false} mode="popLayout">
           {updates.map((u) => (
             <UpdateCard
@@ -42,6 +44,7 @@ export default function OverviewPanel({ updates, byId, stats, onSelect, onOpenIm
             Tap a light on the globe to meet the missionaries we support.
           </p>
         )}
+      </ScrollArea>
       </div>
     </div>
   )
