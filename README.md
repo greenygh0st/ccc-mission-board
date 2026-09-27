@@ -19,6 +19,10 @@ manage missionaries and missionaries post updates for approval. This app only
   - Animated arcs run from the church to each missionary.
   - Drag to spin, pinch to zoom, tap a light (taps up to ~56px off still count).
   - Missionaries without coordinates are placed at their country's centre.
+  - It starts **centred on the church** and slowly spins east–west while nothing is selected.
+  - If someone drags it and lets go, it flies back to Home after 10 seconds and spins again.
+  - With a missionary selected it stays on them, including after a drag.
+  - The rules live in `web/src/globe/spinController.ts`.
 - **Left rail**
   - Shows the **latest 3 updates** from everyone.
   - Tap a card or a light and it becomes that missionary's page: photo, family, ministry, bio,
@@ -33,9 +37,13 @@ manage missionaries and missionaries post updates for approval. This app only
   - After `IDLE_SECONDS` without a touch, the board resets, the globe rotates, and it cycles
     through missionaries with the newest news.
   - Any touch brings it back.
+- **Visitors off the church network** see a plain "This page isn't available here" page, which
+  reveals nothing about the board. API and media requests still get a bare JSON 404.
 - **Kiosk hardening**
   - No zoom, text selection, context menu or navigation.
   - The cursor stays hidden, crashes recover on their own, and the page reloads nightly at 3am.
+- **Church logo:** the square logo from Gathered's branding is shown as a circle in the corner.
+  A wide wordmark is only used, uncropped, when there's no logo.
 - **Resilience**
   - The server keeps the last good data on disk.
   - If Gathered is down or the token is revoked, the wall keeps showing cached data, with a small

@@ -28,9 +28,13 @@ export class ImageCache {
     let identity = sourceUrl
     try {
       const u = new URL(sourceUrl)
-      identity = u.pathname // host-independent: internal vs public URL of the same blob
+      // Host-independent for http(s): the internal and public URL of the same
+      // ActiveStorage blob share a cache entry. Any other scheme (mock://…)
+      // hashes whole — its "host" is part of the identity (mock://portrait/1
+      // vs mock://scene/1 have the same pathname "/1").
+      if (u.protocol === 'http:' || u.protocol === 'https:') identity = u.pathname + u.search
     } catch {
-      /* non-URL identifiers (mock://…) hash as-is */
+      /* non-URL identifiers hash as-is */
     }
     return createHash('sha256').update(identity).digest('hex').slice(0, 40)
   }

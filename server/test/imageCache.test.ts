@@ -13,6 +13,19 @@ describe('ImageCache', () => {
       .toBe(ImageCache.keyFor('https://gathered.example.org/rails/active_storage/blobs/redirect/k/p.jpg'))
   })
 
+  // Regression: keys were pathname-only for every scheme, so mock://portrait/1,
+  // mock://scene/1 and mock://logo/1 all collided on "/1" and served each
+  // other's images.
+  it('gives distinct keys to different non-http sources with the same path', () => {
+    const keys = ['mock://portrait/1', 'mock://scene/1', 'mock://logo/1'].map((u) => ImageCache.keyFor(u))
+    expect(new Set(keys).size).toBe(3)
+  })
+
+  it('keeps distinct keys for different blobs on the same host', () => {
+    expect(ImageCache.keyFor('https://g.example/rails/active_storage/blobs/redirect/a/p.jpg'))
+      .not.toBe(ImageCache.keyFor('https://g.example/rails/active_storage/blobs/redirect/b/p.jpg'))
+  })
+
   it('resizes to WebP, caches on disk, and fetches the source only once', async () => {
     const dir = await tmpDir()
     const fetcher = vi.fn(async () => png(3000, 2000))

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
 import { Color, MeshPhongMaterial } from 'three'
 import { angularDistance, HEX_RESOLUTION, hexLandFeatures, type PlacedMissionary } from './geo'
+import { DEFAULT_SPIN, SpinController } from './spinController'
 
 export interface MissionGlobeProps {
   width: number
@@ -15,6 +16,7 @@ export interface MissionGlobeProps {
   focusId: string | null
   /** Missionaries with a recent update get a pulsing ring */
   recentIds: Set<string>
+  /** Allowed to slowly spin (nothing focused). See spinController.ts for the rules. */
   autoRotate: boolean
   reducedMotion: boolean
   /** Camera distance multiplier. The camera's field of view is vertical, so on a
@@ -23,7 +25,12 @@ export interface MissionGlobeProps {
   onSelect: (id: string) => void
 }
 
-const OVERVIEW = { lat: 18, lng: -40, altitude: 2.35 }
+const OVERVIEW_ALTITUDE = 2.35
+
+/** The resting view: centred on the church, pulled back to show the globe. */
+export function overviewFor(home: { lat: number; lng: number }, altitudeScale = 1) {
+  return { lat: home.lat, lng: home.lng, altitude: OVERVIEW_ALTITUDE * altitudeScale }
+}
 const FOCUS_ALTITUDE = 1.55
 const TAP_RADIUS_PX = 56
 
@@ -33,6 +40,10 @@ export default function MissionGlobe(props: MissionGlobeProps) {
   const { width, height, offset, placed, home, accent, focusId, recentIds, autoRotate, reducedMotion, onSelect, altitudeScale = 1 } = props
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const readyRef = useRef(false)
+  const spinRef = useRef<SpinController | null>(null)
+  // Latest values for callbacks created once in setup()
+  const live = useRef({ home, altitudeScale, reducedMotion, autoRotate })
+  live.current = { home, altitudeScale, reducedMotion, autoRotate }
 
   const material = useMemo(
     () =>
@@ -80,7 +91,27 @@ export default function MissionGlobe(props: MissionGlobeProps) {
     c.zoomSpeed = 0.7
     c.minDistance = 100 * (1 + 0.75 * altitudeScale)
     c.maxDistance = 100 * (1 + 3.6 * altitudeScale)
-    g.pointOfView({ ...OVERVIEW, altitude: OVERVIEW.altitude * altitudeScale }, 0)
+    c.autoRotateSpeed = reducedMotion ? 0.15 : 0.35
+    g.pointOfView(overviewFor(home, altitudeScale), 0)
+
+    const spin = new SpinController(
+      {
+        setAutoRotate: (on) => {
+          c.autoRotate = on
+        },
+        recenter: (ms) => {
+          const { home: h, altitudeScale: s, reducedMotion: r } = live.current
+          g.pointOfView(overviewFor(h, s), r ? 0 : ms)
+        },
+      },
+      { ...DEFAULT_SPIN, flyMs: reducedMotion ? 0 : DEFAULT_SPIN.flyMs },
+    )
+    // OrbitControls fires start/end around every drag, pinch and wheel zoom.
+    c.addEventListener('start', () => spin.userStart())
+    c.addEventListener('end', () => spin.userEnd())
+    spin.setAllowed(autoRotate)
+    spin.start()
+    spinRef.current = spin
   }
 
   // Zoom limits follow the aspect-ratio scale (radius 100 → distance = 100 × (1 + altitude)).
@@ -93,21 +124,26 @@ export default function MissionGlobe(props: MissionGlobeProps) {
 
   useEffect(() => {
     setup()
+    return () => spinRef.current?.dispose()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Selecting a missionary stops the spin; clearing it resumes (after the
+  // flight back to Home in the effect below).
+  useEffect(() => {
+    spinRef.current?.setAllowed(autoRotate)
+  }, [autoRotate])
+
   useEffect(() => {
     const c = globeRef.current?.controls()
-    if (!c) return
-    c.autoRotate = autoRotate
-    c.autoRotateSpeed = reducedMotion ? 0.15 : 0.45
-  }, [autoRotate, reducedMotion])
+    if (c) c.autoRotateSpeed = reducedMotion ? 0.15 : 0.35
+  }, [reducedMotion])
 
   useEffect(() => {
     const g = globeRef.current
     if (!g || !readyRef.current) return
     if (focused) g.pointOfView({ lat: focused.lat, lng: focused.lng, altitude: FOCUS_ALTITUDE * altitudeScale }, reducedMotion ? 0 : 1400)
-    else g.pointOfView({ ...OVERVIEW, altitude: OVERVIEW.altitude * altitudeScale }, reducedMotion ? 0 : 1600)
+    else g.pointOfView(overviewFor(home, altitudeScale), reducedMotion ? 0 : 1600)
     // Fly on focus change (or rotation to portrait) only; re-flying on unrelated
     // re-renders would fight the user's drag.
     // eslint-disable-next-line react-hooks/exhaustive-deps

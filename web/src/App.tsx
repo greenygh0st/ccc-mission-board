@@ -140,7 +140,7 @@ export function Board({ data }: { data: BoardResponse }) {
             accent={data.church.accentColor}
             focusId={focusId}
             recentIds={recentIds}
-            autoRotate={idle && !focusId}
+            autoRotate={!focusId}
             reducedMotion={reducedMotion}
             altitudeScale={layout.altitudeScale}
             onSelect={setSelectedId}
@@ -175,7 +175,7 @@ export function Board({ data }: { data: BoardResponse }) {
 }
 
 function TopBar({ data, layout, showHint }: { data: BoardResponse; layout: Layout; showHint: boolean }) {
-  const logo = data.church.wordmark ?? data.church.logo
+  const { logo, wordmark } = data.church
   return (
     <div
       className="pointer-events-none absolute top-[var(--gutter)] right-[var(--gutter)] flex flex-col items-end gap-3"
@@ -184,7 +184,16 @@ function TopBar({ data, layout, showHint }: { data: BoardResponse; layout: Layou
       <div className="flex items-center gap-4">
         <StatusDot stale={data.stale} fetchedAt={data.fetchedAt} />
         {logo ? (
-          <img src={logo.full} alt={data.church.name} className="h-[clamp(40px,4vw,96px)] w-auto object-contain drop-shadow-lg" draggable={false} />
+          // Square church logo shown as a circle (reads better as a badge on the globe than a square)
+          <img
+            src={logo.full}
+            alt={data.church.name}
+            className="size-[clamp(48px,4.4vw,104px)] rounded-full bg-cream object-cover shadow-lg ring-2 ring-cream/25"
+            draggable={false}
+          />
+        ) : wordmark ? (
+          // A wide wordmark would be cropped by a circle — show it as-is
+          <img src={wordmark.full} alt={data.church.name} className="h-[clamp(40px,4vw,96px)] w-auto object-contain drop-shadow-lg" draggable={false} />
         ) : (
           <p className="font-display text-kiosk-lg font-semibold text-cream/90 drop-shadow-lg">{data.church.name}</p>
         )}

@@ -22,6 +22,38 @@ const CSP = [
   "form-action 'none'",
 ].join('; ')
 
+function wantsHtml(url: string, accept: string | undefined): boolean {
+  if (url.startsWith('/api/') || url.startsWith('/media/')) return false
+  return (accept ?? '').includes('text/html')
+}
+
+// Self-contained (inline styles only — allowed by the CSP; no fonts, images or
+// scripts). Deliberately generic: no church name, no mention of missionaries.
+const NOT_AVAILABLE_HTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Not available</title>
+<style>
+  html,body{height:100%;margin:0}
+  body{display:grid;place-items:center;background:radial-gradient(ellipse at center,#0b2530 0%,#040c12 70%);
+       color:#f6efe4;font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;padding:24px}
+  .dot{width:14px;height:14px;border-radius:50%;background:#bd7142;margin:0 auto 20px;box-shadow:0 0 24px 4px rgba(189,113,66,.45)}
+  h1{font:600 clamp(1.4rem,3vw,2rem)/1.2 ui-serif,Georgia,serif;margin:0 0 8px}
+  p{margin:0;color:#a9c3cc;max-width:32ch}
+</style>
+</head>
+<body>
+  <main>
+    <div class="dot"></div>
+    <h1>This page isn't available here</h1>
+    <p>It can only be viewed on site.</p>
+  </main>
+</body>
+</html>`
+
 export function buildApp(config: Config, store: BoardStore, images: ImageCache, opts: { logger?: boolean } = {}): FastifyInstance {
   const app = Fastify({
     logger: opts.logger ?? true,
@@ -41,6 +73,12 @@ export function buildApp(config: Config, store: BoardStore, images: ImageCache, 
     if (req.url === '/healthz') return
     if (!isAllowed(req.ip, config.viewerNetworks)) {
       req.log.warn({ ip: req.ip }, 'Denied viewer outside VIEWER_ALLOWED_NETWORKS')
+      // A person opening the page in a browser gets a calm page, not raw
+      // JSON; API/media/programmatic callers still get the bare JSON 404.
+      // Either way nothing about missionaries or the church is revealed.
+      if (wantsHtml(req.url, req.headers.accept)) {
+        return reply.code(404).type('text/html; charset=utf-8').send(NOT_AVAILABLE_HTML)
+      }
       return reply.code(404).send({ error: 'Not found' })
     }
   })

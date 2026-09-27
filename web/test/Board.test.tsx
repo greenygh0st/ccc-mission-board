@@ -69,6 +69,27 @@ describe('Board', () => {
   })
 })
 
+describe('church logo', () => {
+  const img = { thumb: '/media/l/thumb', full: '/media/l/full' }
+
+  it('shows the square logo as a circle, preferring it over a wordmark', () => {
+    const data = boardFixture()
+    data.church.logo = img
+    data.church.wordmark = { thumb: '/media/w/thumb', full: '/media/w/full' }
+    render(<Board data={data} />)
+    const logo = screen.getByRole('img', { name: 'Test Church' })
+    expect(logo).toHaveAttribute('src', '/media/l/full')
+    expect(logo.className).toContain('rounded-full')
+  })
+
+  it('falls back to an uncropped wordmark when there is no logo', () => {
+    const data = boardFixture()
+    data.church.wordmark = img
+    render(<Board data={data} />)
+    expect(screen.getByRole('img', { name: 'Test Church' }).className).not.toContain('rounded-full')
+  })
+})
+
 describe('helpers', () => {
   it('groups the strip by region in display order with sensitive last', () => {
     const groups = groupForStrip(boardFixture().missionaries)

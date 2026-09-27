@@ -147,7 +147,7 @@ export class MockSource implements BoardSource {
   async fetchBranding(): Promise<GatheredBranding> {
     return {
       church_name: this.churchName ?? 'Our Church',
-      church_logo_url: null,
+      church_logo_url: 'mock://logo/1',
       church_wordmark_url: null,
       primary_color: '#133A49',
       accent_color: '#BD7142',
@@ -183,9 +183,19 @@ function sceneSvg(n: number) {
   </svg>`
 }
 
+// A square placeholder church logo (real logos are square too), so the
+// circular logo treatment gets exercised in the sandbox.
+function logoSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+    <rect width="512" height="512" fill="#f6efe4"/>
+    <circle cx="256" cy="256" r="150" fill="none" stroke="#133a49" stroke-width="44"/>
+    <path d="M256 150 V362 M190 222 H322" stroke="#bd7142" stroke-width="40" stroke-linecap="round"/>
+  </svg>`
+}
+
 export async function renderMockImage(url: string): Promise<Buffer> {
-  const m = /^mock:\/\/(portrait|scene)\/(\d+)$/.exec(url)
+  const m = /^mock:\/\/(portrait|scene|logo)\/(\d+)$/.exec(url)
   if (!m) throw new Error(`Unknown mock image ${url}`)
-  const svg = m[1] === 'portrait' ? portraitSvg(Number(m[2])) : sceneSvg(Number(m[2]))
+  const svg = m[1] === 'portrait' ? portraitSvg(Number(m[2])) : m[1] === 'logo' ? logoSvg() : sceneSvg(Number(m[2]))
   return sharp(Buffer.from(svg)).png().toBuffer()
 }

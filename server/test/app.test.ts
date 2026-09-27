@@ -28,6 +28,25 @@ describe('HTTP app', () => {
     expect(res.statusCode).toBe(404)
   })
 
+  it('shows browsers a friendly page instead of raw JSON when refused — revealing nothing', async () => {
+    const app = await setup()
+    const res = await app.inject({ url: '/', remoteAddress: '8.8.8.8', headers: { accept: 'text/html,application/xhtml+xml' } })
+    expect(res.statusCode).toBe(404)
+    expect(res.headers['content-type']).toMatch(/text\/html/)
+    expect(res.body).toContain("isn't available")
+    expect(res.body).not.toMatch(/missionar|Missionary A|"error"/i)
+    expect(res.headers['content-security-policy']).toContain("default-src 'self'")
+  })
+
+  it('still gives API and media callers a bare JSON 404 even if they accept HTML', async () => {
+    const app = await setup()
+    for (const url of ['/api/board', `/media/${'a'.repeat(40)}/thumb`]) {
+      const res = await app.inject({ url, remoteAddress: '8.8.8.8', headers: { accept: 'text/html' } })
+      expect(res.statusCode).toBe(404)
+      expect(res.json()).toEqual({ error: 'Not found' })
+    }
+  })
+
   it('ignores a spoofed X-Forwarded-For when no proxy is trusted', async () => {
     const app = await setup()
     const res = await app.inject({ url: '/api/board', remoteAddress: '8.8.8.8', headers: { 'x-forwarded-for': '192.168.10.44' } })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { countryCentroid, countryCode, hexLandFeatures, placeMissionaries } from '../src/globe/geo'
+import { overviewFor } from '../src/globe/MissionGlobe'
 import { mis } from './fixtures'
 
 describe('placeMissionaries', () => {
@@ -69,5 +70,12 @@ describe('country resolution', () => {
 
   it('returns null centroid for unknown countries', () => {
     expect(countryCentroid('Narnia')).toBeNull()
+  })
+})
+
+describe('overviewFor', () => {
+  it('centres the resting view on the church (home), scaled for portrait', () => {
+    expect(overviewFor({ lat: 35.5, lng: -97.7 })).toEqual({ lat: 35.5, lng: -97.7, altitude: 2.35 })
+    expect(overviewFor({ lat: 35.5, lng: -97.7 }, 2).altitude).toBeCloseTo(4.7)
   })
 })
